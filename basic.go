@@ -8,10 +8,11 @@
 package basic
 
 import (
-	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
+	`fmt`
+	`regexp`
+	`sort`
+	`strconv`
+	`strings`
 )
 
 var Debug bool
@@ -19,7 +20,7 @@ var Debug bool
 var F = fmt.Sprintf
 
 var FindKeyword = regexp.MustCompile(`^(rem|let|print|if|then|else|for|next|stop)\b`).FindString
-var FindNewline = regexp.MustCompile("^\n").FindString
+var FindNewline = regexp.MustCompile("^[;\n]").FindString
 var FindWhite = regexp.MustCompile("^[ \t]*").FindString
 var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_*]*`).FindString
 var FindNumber = regexp.MustCompile(`^[0-9]+`).FindString
@@ -55,24 +56,71 @@ func (k Kind) String() string {
 	}
 }
 
-type Lex struct {
+type ForFrame struct {
+	Var   string
+	Value float64
+	Max   float64
+}
+
+type Line struct {
+	N   int
+	Cmd Cmd
+}
+type LineSlice []Line                  // Can sort.
+func (o LineSlice) Len() int           { return len(o) }
+func (o LineSlice) Less(i, j int) bool { return o[i].N < o[j].N }
+func (o LineSlice) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
+
+type Terp struct {
+	// Lexer state.
 	Program string
 	P       int
 	K       Kind
 	S       string
 	F       float64
+	// Interpreter state.
+	G           map[string]float64
+	Stack       []*ForFrame
+	Lines       LineSlice
+	LastPrinted float64
 }
 
-func NewLex(program string) *Lex {
-	return &Lex{Program: program}
+func NewTerp(program string) *Terp {
+	t := &Terp{
+		Program: program,
+		G:       make(map[string]float64),
+	}
+	t.Lines = t.ParseProgram()
+	sort.Sort(t.Lines)
+	return t
 }
-func (o *Lex) Advance() {
+
+func (t *Terp) Run() {
+	t.G = make(map[string]float64)
+	t.Stack = make([]*ForFrame, 0)
+	i := 0
+	n := len(t.Lines)
+	for i < n {
+		j := t.Lines[i].Cmd.Eval(t)
+		if j > 0 {
+			for i := 0; i < n; i++ {
+				if t.Lines[i].N == j {
+					break
+				}
+			}
+		} else {
+			i++
+		}
+	}
+}
+
+func (o *Terp) Advance() {
 	o.Advance1()
 	if Debug {
 		println(F("[[ %5d:   %10v %10q ... %q ]]", o.P, o.K, o.S, o.Program[o.P:]))
 	}
 }
-func (o *Lex) Advance1() {
+func (o *Terp) Advance1() {
 	m := FindWhite(o.Program[o.P:])
 	o.P += len(m)
 	if o.P == len(o.Program) {
@@ -146,17 +194,25 @@ func (o *Expr) Eval(t *Terp) float64 {
 	}
 }
 
+type NopCmd struct{}
+
+func (o *NopCmd) Show(t *Terp) string { return "Nop..." }
+func (o *NopCmd) Eval(t *Terp) int {
+	return 0
+}
+
 type PrintCmd struct {
 	X *Expr
 }
 
 func (o *PrintCmd) Show(t *Terp) string { return "Print..." }
-func (o *PrintCmd) Run(t *Terp) {
-	z := o.X.Eval(t)
+func (o *PrintCmd) Eval(t *Terp) int {
+	t.LastPrinted = o.X.Eval(t)
 	if Debug {
-		println(F("## PRINT %g", z))
+		println(F("## PRINT %g", t.LastPrinted))
 	}
-	fmt.Printf("%g ", z)
+	fmt.Printf("%g ", t.LastPrinted)
+	return 0
 }
 
 type LetCmd struct {
@@ -164,12 +220,13 @@ type LetCmd struct {
 	X   *Expr
 }
 
-func (o *LetCmd) Run(t *Terp) {
+func (o *LetCmd) Eval(t *Terp) int {
 	z := o.X.Eval(t)
 	if Debug {
 		println(F("## LET %s = %g", o.Var, z))
 	}
 	t.G[o.Var] = z
+	return 0
 }
 func (o *LetCmd) Show(t *Terp) string { return "Let..." }
 
@@ -182,40 +239,11 @@ type NextCmd struct {
 	Var string
 }
 type Cmd interface {
-	Run(t *Terp)
+	Eval(t *Terp) int
 	Show(t *Terp) string
 }
 
-type ForFrame struct {
-	Var   string
-	Value float64
-	Max   float64
-}
-
-type Line struct {
-	N   int
-	Cmd Cmd
-}
-
-type Terp struct {
-	G     map[string]float64
-	Stack []*ForFrame
-	Prog  []Line
-}
-
-func NewTerp() *Terp {
-	z := &Terp{
-		G: make(map[string]float64),
-	}
-	return z
-}
-
-func ParseProgram(program string) []Line {
-	lex := NewLex(program)
-	return lex.ParseProgram()
-}
-
-func (lex *Lex) ParsePrim() *Expr {
+func (lex *Terp) ParsePrim() *Expr {
 	z := &Expr{}
 	switch lex.K {
 	case Var:
@@ -231,7 +259,7 @@ func (lex *Lex) ParsePrim() *Expr {
 	}
 	return z
 }
-func (lex *Lex) ParseExpr() *Expr {
+func (lex *Terp) ParseExpr() *Expr {
 	a := lex.ParsePrim()
 	for lex.K == Op {
 		op := lex.S
@@ -242,7 +270,7 @@ func (lex *Lex) ParseExpr() *Expr {
 	return a
 }
 
-func (lex *Lex) ParseProgram() []Line {
+func (lex *Terp) ParseProgram() []Line {
 	var c Cmd
 	var w string // the command
 	var n int    // the line number
@@ -266,11 +294,20 @@ Loop:
 		switch lex.K {
 		case Keyword:
 			w = lex.S
+		case Newline:
+			w = ";"
 		default:
 			panic("expected command")
 		}
 		lex.Advance()
 		switch strings.ToLower(w) {
+		case ";":
+			c = &NopCmd{}
+		case "rem":
+			c = &NopCmd{}
+			for lex.K != EOF && lex.K != Newline {
+				lex.Advance()
+			}
 		case "print":
 			x := lex.ParseExpr()
 			c = &PrintCmd{X: x}

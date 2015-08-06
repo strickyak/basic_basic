@@ -1,18 +1,23 @@
+/*
+$ echo '555 print 3 + 88;88 print 9; 44' | go run cli/main.go
+9 91
+*/
 package main
 
 import . "github.com/strickyak/basic_basic"
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 )
 
 func main() {
-	p1 := `10 let x = 42
-         20 print x + 1`
-	lines := ParseProgram(p1)
-	terp := NewTerp()
-	for _, e := range lines {
-		e.Cmd.Run(terp)
+	prog, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		panic(err)
 	}
+	terp := NewTerp(string(prog))
+	terp.Run()
 	fmt.Printf("\n")
 }
