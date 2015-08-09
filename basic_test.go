@@ -14,6 +14,7 @@ type PF struct {
 
 func TestOne(t *testing.T) {
 	progs := []PF{
+		PF{`  10 print 3*3+4*4`, 25},
 		PF{`  10 let x = 42
           20 print x + 1`, 43},
 		PF{`44 goto 88

@@ -139,7 +139,7 @@ Loop:
 func (o *Terp) Advance() {
 	o.Advance1()
 	if Debug {
-		println(F("[[ %5d:   %10v %10q ... %q ]]", o.P, o.K, o.S, o.Program[o.P:]))
+		println(F("[[LEX %5d:   %8v LEX %-10q ... %q ]]", o.P, o.K, o.S, o.Program[o.P:]))
 	}
 }
 func (o *Terp) Advance1() {
@@ -171,6 +171,14 @@ func (o *Terp) Advance1() {
 		o.P += len(m)
 		return
 	}
+	m = FindNumber(o.Program[o.P:])
+	if m != "" {
+		o.K = Number
+		o.S = m
+		o.F, _ = strconv.ParseFloat(m, 64)
+		o.P += len(m)
+		return
+	}
 	m = FindPunc(o.Program[o.P:])
 	if m != "" {
 		o.K = Punc
@@ -182,14 +190,6 @@ func (o *Terp) Advance1() {
 	if m != "" {
 		o.K = Op
 		o.S = m
-		o.P += len(m)
-		return
-	}
-	m = FindNumber(o.Program[o.P:])
-	if m != "" {
-		o.K = Number
-		o.S = m
-		o.F, _ = strconv.ParseFloat(m, 64)
 		o.P += len(m)
 		return
 	}
@@ -453,7 +453,7 @@ func (lex *Terp) ParseExpr() *Expr {
 	*/
 }
 
-var MatchProduct = regexp.MustCompile(`^([*]|/|%])$`).MatchString
+var MatchProduct = regexp.MustCompile(`^([*]|/|%)$`).MatchString
 var MatchSum = regexp.MustCompile(`^([+]|-|\^)$`).MatchString
 var MatchRelop = regexp.MustCompile(`^(=|==|<|<=|>|>=|!=|<>)$`).MatchString
 
@@ -461,6 +461,7 @@ func (lex *Terp) ParseProduct() *Expr {
 	a := lex.ParsePrim()
 	for lex.K == Op && MatchProduct(lex.S) {
 		op := lex.S
+		println(F("ParseProduct consumes op %q", op))
 		lex.Advance()           // Consume op.
 		b := lex.ParseProduct() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
@@ -470,9 +471,15 @@ func (lex *Terp) ParseProduct() *Expr {
 }
 func (lex *Terp) ParseSum() *Expr {
 	a := lex.ParseProduct()
-	for lex.K == Op && MatchSum(lex.S) {
+	for lex.K == Op && MatchSum(lex.S) || lex.K == Number && lex.S[0] == '-' {
 		op := lex.S
-		lex.Advance()       // Consume op.
+		if lex.K == Number { // Negative constant (ambiguous "-" sign)
+			println(F("ParseSum Ambiguous %q", op))
+			op = "+"
+		} else {
+			println(F("ParseSum consumes op %q", op))
+			lex.Advance() // Consume op.
+		}
 		b := lex.ParseSum() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
