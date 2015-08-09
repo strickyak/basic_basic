@@ -437,10 +437,14 @@ func (lex *Terp) ParsePrim() *Expr {
 }
 func (lex *Terp) ParseExpr() *Expr {
 	a := lex.ParsePrim()
-	for lex.K == Op {
+	for lex.K == Op || lex.K == Number && lex.S[0] == '-' {
 		op := lex.S
-		lex.Advance()
-		b := lex.ParsePrim()
+		if lex.K == Number { // Negative constant (ambiguous "-" sign)
+			op = "+"
+		} else {
+			lex.Advance() // Consume op.
+		}
+		b := lex.ParsePrim() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
 	return a
