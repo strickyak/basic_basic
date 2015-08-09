@@ -1,5 +1,5 @@
 /*
-$ echo '555 print 3 + 88;88 print 9; 44' | go run cli/main.go
+$ echo '555 print 3 + 88;88 print 9; 44' | go run cli/main.go 2>/dev/null
 9 91
 */
 package main
