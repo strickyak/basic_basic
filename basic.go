@@ -17,11 +17,12 @@ var Epsilon = 0.000001
 
 var F = fmt.Sprintf
 
-var FindKeyword = regexp.MustCompile(`^(?i)(rem|let|dim|print|goto|gosub|return|if|then|else|for|to|next|stop)\b`).FindString
+var FindKeyword = regexp.MustCompile(`^(?i)(rem|let|dim|print|goto|gosub|return|if|then|else|for|to|next|stop|call)\b`).FindString
 var FindNewline = regexp.MustCompile("^[;\n]").FindString
 var FindWhite = regexp.MustCompile("^[ \t]*").FindString
 var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_*]*`).FindString
 var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString
+var FindPunc = regexp.MustCompile(`^[()[]{},;]`).FindString
 var FindOp = regexp.MustCompile(`^[^A-Za-z0-9;\s]+`).FindString
 
 type Kind int
@@ -32,6 +33,7 @@ const (
 	Var
 	Number
 	Newline
+	Punc
 	Op
 )
 
@@ -63,6 +65,13 @@ func (o LineSlice) Len() int           { return len(o) }
 func (o LineSlice) Less(i, j int) bool { return o[i].N < o[j].N }
 func (o LineSlice) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 
+type Callable func(t *Terp, args []float64) float64
+
+func (t *Terp) AddExtension(name string, fn Callable)  {
+  name = strings.ToLower(name)
+  t.Extensions[name] = fn
+}
+
 type Terp struct {
 	// Lexer state.
 	Program string
@@ -77,12 +86,14 @@ type Terp struct {
 	Lines       LineSlice
 	Line        int
 	LastPrinted float64
+  Extensions map[string]Callable
 }
 
 func NewTerp(program string) *Terp {
 	t := &Terp{
 		Program: program,
 		G:       make(map[string]float64),
+    Extensions: make(map[string]Callable),
 	}
 	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	t.Advance()
@@ -186,10 +197,10 @@ type Expr struct {
 
 func (o *Expr) String() string {
 	if o.Const != nil {
-		return F("(Const:%g)", o.Const)
+		return F("(Const:%g)", *o.Const)
 	}
 	if o.Var != nil {
-		return F("(Var:%g)", o.Const)
+		return F("(Var:%s)", *o.Var)
 	}
 	return F("(%s %s %s)", o.A.String(), Op, o.B.String())
 }
@@ -293,6 +304,24 @@ func (o *PrintCmd) Eval(t *Terp) int {
 	}
 	fmt.Printf("%g ", t.LastPrinted)
 	return 0
+}
+
+type CallCmd struct {
+  Var string
+  Args []*Expr
+}
+func (o *CallCmd) String() string { return F("CALL %s (%v)", o.Var, o.Args) }
+func (o *CallCmd) Eval(t *Terp) int {
+  ext, ok := t.Extensions[o.Var]
+  if !ok {
+    panic(F("cannot call unknown extension: %q", o.Var))
+  }
+  var args []float64
+  for _, e := range o.Args {
+    args = append(args, e.Eval(t))
+  }
+  _ = ext(t, args)
+  return 0
 }
 
 type LetCmd struct {
@@ -399,7 +428,7 @@ func (lex *Terp) ParsePrim() *Expr {
 }
 func (lex *Terp) ParseExpr() *Expr {
 	a := lex.ParsePrim()
-	for lex.K == Op {
+	for lex.K == Op && lex.S != ")" && lex.S != "," {
 		op := lex.S
 		lex.Advance()
 		b := lex.ParsePrim()
@@ -487,6 +516,24 @@ Loop:
 				ifFalse = TrimInt(lex.ParseNumber())
 			}
 			c = &IfCmd{Cond: cond, Then: ifTrue, Else: ifFalse}
+    case "call":
+			name := strings.ToLower(lex.ParseVar())
+      println("name=", name)
+			lex.ParseMustSym("(")
+      var args []*Expr
+      for {
+        for lex.S == "," {
+          println("comma")
+          lex.Advance()
+        }
+        if lex.S == ")" { break }
+        println(" not close paren ", lex.S)
+			  a := lex.ParseExpr()
+        println("  got arg ", a)
+        args = append(args, a)
+      }
+			lex.ParseMustSym(")")
+      c = &CallCmd{name, args}
 		default:
 			panic("unknown command: " + w)
 		}
