@@ -8,13 +8,25 @@ import . "github.com/strickyak/basic_basic"
 import "github.com/strickyak/basic_basic/draw"
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 )
 
 func main() {
-	prog, err := ioutil.ReadAll(os.Stdin)
+  flag.BoolVar(&Debug, "d", false, "debug bit")
+  var filename string
+  flag.StringVar(&filename, "f", "", "basic source file")
+  flag.Parse()
+
+  var prog []byte
+  var err error
+  if filename == "" {
+	  prog, err = ioutil.ReadAll(os.Stdin)
+  } else {
+	  prog, err = ioutil.ReadFile(filename)
+  }
 	if err != nil {
 		panic(err)
 	}
