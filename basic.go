@@ -18,12 +18,13 @@ var Epsilon = 0.000001
 var F = fmt.Sprintf
 
 var FindKeyword = regexp.MustCompile(`^(?i)(rem|let|dim|print|goto|gosub|return|if|then|else|for|to|next|stop|call)\b`).FindString
-var FindNewline = regexp.MustCompile("^[;\n]").FindString
-var FindWhite = regexp.MustCompile("^[ \t]*").FindString
-var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_*]*`).FindString
-var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString
-var FindPunc = regexp.MustCompile(`^[()[]{},;]`).FindString
-var FindOp = regexp.MustCompile(`^[^A-Za-z0-9;\s]+`).FindString
+
+var FindNewline = regexp.MustCompile("^[;\n]").FindString              // Semicolons are newlines.
+var FindWhite = regexp.MustCompile("^[ \t\r]*").FindString             // But not newlines.
+var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`).FindString // Like C identifiers.
+var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString  // Not yet E notaion.
+var FindPunc = regexp.MustCompile(`^[][(){},;]`).FindString            // Single char punc.
+var FindOp = regexp.MustCompile(`^[^A-Za-z0-9;\s]+`).FindString        // May be multichar op.
 
 type Kind int
 
@@ -67,9 +68,9 @@ func (o LineSlice) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 
 type Callable func(t *Terp, args []float64) float64
 
-func (t *Terp) AddExtension(name string, fn Callable)  {
-  name = strings.ToLower(name)
-  t.Extensions[name] = fn
+func (t *Terp) AddExtension(name string, fn Callable) {
+	name = strings.ToLower(name)
+	t.Extensions[name] = fn
 }
 
 type Terp struct {
@@ -86,14 +87,14 @@ type Terp struct {
 	Lines       LineSlice
 	Line        int
 	LastPrinted float64
-  Extensions map[string]Callable
+	Extensions  map[string]Callable
 }
 
 func NewTerp(program string) *Terp {
 	t := &Terp{
-		Program: program,
-		G:       make(map[string]float64),
-    Extensions: make(map[string]Callable),
+		Program:    program,
+		G:          make(map[string]float64),
+		Extensions: make(map[string]Callable),
 	}
 	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	t.Advance()
@@ -175,6 +176,13 @@ func (o *Terp) Advance1() {
 		o.K = Number
 		o.S = m
 		o.F, _ = strconv.ParseFloat(m, 64)
+		o.P += len(m)
+		return
+	}
+	m = FindPunc(o.Program[o.P:])
+	if m != "" {
+		o.K = Punc
+		o.S = m
 		o.P += len(m)
 		return
 	}
@@ -307,21 +315,22 @@ func (o *PrintCmd) Eval(t *Terp) int {
 }
 
 type CallCmd struct {
-  Var string
-  Args []*Expr
+	Var  string
+	Args []*Expr
 }
+
 func (o *CallCmd) String() string { return F("CALL %s (%v)", o.Var, o.Args) }
 func (o *CallCmd) Eval(t *Terp) int {
-  ext, ok := t.Extensions[o.Var]
-  if !ok {
-    panic(F("cannot call unknown extension: %q", o.Var))
-  }
-  var args []float64
-  for _, e := range o.Args {
-    args = append(args, e.Eval(t))
-  }
-  _ = ext(t, args)
-  return 0
+	ext, ok := t.Extensions[o.Var]
+	if !ok {
+		panic(F("cannot call unknown extension: %q", o.Var))
+	}
+	var args []float64
+	for _, e := range o.Args {
+		args = append(args, e.Eval(t))
+	}
+	_ = ext(t, args)
+	return 0
 }
 
 type LetCmd struct {
@@ -428,7 +437,7 @@ func (lex *Terp) ParsePrim() *Expr {
 }
 func (lex *Terp) ParseExpr() *Expr {
 	a := lex.ParsePrim()
-	for lex.K == Op && lex.S != ")" && lex.S != "," {
+	for lex.K == Op {
 		op := lex.S
 		lex.Advance()
 		b := lex.ParsePrim()
@@ -516,24 +525,26 @@ Loop:
 				ifFalse = TrimInt(lex.ParseNumber())
 			}
 			c = &IfCmd{Cond: cond, Then: ifTrue, Else: ifFalse}
-    case "call":
+		case "call":
 			name := strings.ToLower(lex.ParseVar())
-      println("name=", name)
+			println("name=", name)
 			lex.ParseMustSym("(")
-      var args []*Expr
-      for {
-        for lex.S == "," {
-          println("comma")
-          lex.Advance()
-        }
-        if lex.S == ")" { break }
-        println(" not close paren ", lex.S)
-			  a := lex.ParseExpr()
-        println("  got arg ", a)
-        args = append(args, a)
-      }
+			var args []*Expr
+			for {
+				for lex.S == "," {
+					println("comma")
+					lex.Advance()
+				}
+				if lex.S == ")" {
+					break
+				}
+				println(" not close paren ", lex.S)
+				a := lex.ParseExpr()
+				println("  got arg ", a)
+				args = append(args, a)
+			}
 			lex.ParseMustSym(")")
-      c = &CallCmd{name, args}
+			c = &CallCmd{name, args}
 		default:
 			panic("unknown command: " + w)
 		}
@@ -560,7 +571,7 @@ func (lex *Terp) ParseNumber() float64 {
 	return f
 }
 func (lex *Terp) ParseMustSym(x string) {
-	Check(lex.K == Op && lex.S == x, "expected symbol: "+x)
+	Check((lex.K == Op || lex.K == Punc) && lex.S == x, "expected symbol: "+x)
 	lex.Advance()
 }
 func (lex *Terp) ParseMustKeyword(x string) {
