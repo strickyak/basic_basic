@@ -171,14 +171,6 @@ func (o *Terp) Advance1() {
 		o.P += len(m)
 		return
 	}
-	m = FindNumber(o.Program[o.P:])
-	if m != "" {
-		o.K = Number
-		o.S = m
-		o.F, _ = strconv.ParseFloat(m, 64)
-		o.P += len(m)
-		return
-	}
 	m = FindPunc(o.Program[o.P:])
 	if m != "" {
 		o.K = Punc
@@ -190,6 +182,14 @@ func (o *Terp) Advance1() {
 	if m != "" {
 		o.K = Op
 		o.S = m
+		o.P += len(m)
+		return
+	}
+	m = FindNumber(o.Program[o.P:])
+	if m != "" {
+		o.K = Number
+		o.S = m
+		o.F, _ = strconv.ParseFloat(m, 64)
 		o.P += len(m)
 		return
 	}
@@ -210,7 +210,7 @@ func (o *Expr) String() string {
 	if o.Var != nil {
 		return F("(Var:%s)", *o.Var)
 	}
-	return F("(%s %s %s)", o.A.String(), Op, o.B.String())
+	return F("(%s {%s} %s)", o.A.String(), o.Op, o.B.String())
 }
 
 func (o *Expr) Eval(t *Terp) float64 {
@@ -436,17 +436,58 @@ func (lex *Terp) ParsePrim() *Expr {
 	return z
 }
 func (lex *Terp) ParseExpr() *Expr {
-	a := lex.ParsePrim()
-	for lex.K == Op || lex.K == Number && lex.S[0] == '-' {
-		op := lex.S
-		if lex.K == Number { // Negative constant (ambiguous "-" sign)
-			op = "+"
-		} else {
-			lex.Advance() // Consume op.
+	return lex.ParseRelop()
+	/*
+		a := lex.ParsePrim()
+		for lex.K == Op || lex.K == Number && lex.S[0] == '-' {
+			op := lex.S
+			if lex.K == Number { // Negative constant (ambiguous "-" sign)
+				op = "+"
+			} else {
+				lex.Advance() // Consume op.
+			}
+			b := lex.ParsePrim() // May be the negative constant.
+			a = &Expr{A: a, Op: op, B: b}
 		}
-		b := lex.ParsePrim() // May be the negative constant.
+		return a
+	*/
+}
+
+var MatchProduct = regexp.MustCompile(`^([*]|/|%])$`).MatchString
+var MatchSum = regexp.MustCompile(`^([+]|-|\^)$`).MatchString
+var MatchRelop = regexp.MustCompile(`^(=|==|<|<=|>|>=|!=|<>)$`).MatchString
+
+func (lex *Terp) ParseProduct() *Expr {
+	a := lex.ParsePrim()
+	for lex.K == Op && MatchProduct(lex.S) {
+		op := lex.S
+		lex.Advance()           // Consume op.
+		b := lex.ParseProduct() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
+	println(F("ParseProduct >>> %v", a))
+	return a
+}
+func (lex *Terp) ParseSum() *Expr {
+	a := lex.ParseProduct()
+	for lex.K == Op && MatchSum(lex.S) {
+		op := lex.S
+		lex.Advance()       // Consume op.
+		b := lex.ParseSum() // May be the negative constant.
+		a = &Expr{A: a, Op: op, B: b}
+	}
+	println(F("ParseSum >>> %v", a))
+	return a
+}
+func (lex *Terp) ParseRelop() *Expr {
+	a := lex.ParseSum()
+	for lex.K == Op && MatchRelop(lex.S) {
+		op := lex.S
+		lex.Advance()         // Consume op.
+		b := lex.ParseRelop() // May be the negative constant.
+		a = &Expr{A: a, Op: op, B: b}
+	}
+	println(F("ParseRelop >>> %v", a))
 	return a
 }
 
