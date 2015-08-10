@@ -45,5 +45,17 @@ func Render(w http.ResponseWriter, req *http.Request) {
 		if d.HasImage() {
 			d.WritePng(w)
 		}
+	} else {
+		Fprintf(w, `
+      <html><body>
+
+        <form method="GET" action="/">
+          <textarea name=code cols=80 rows=25>
+110 CALL triangle( 0,0, 0,99, 99,0, 909 )
+          </textarea>
+          <input type=submit name=submit value=Submit>
+        </form>
+
+      </body></html>`)
 	}
 }
