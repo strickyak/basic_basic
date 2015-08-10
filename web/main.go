@@ -51,7 +51,16 @@ func Render(w http.ResponseWriter, req *http.Request) {
 
         <form method="GET" action="/">
           <textarea name=code cols=80 rows=25>
-110 CALL triangle( 0,0, 0,99, 99,0, 909 )
+1  REM Draw big grey triangle, then many smaller colored ones.
+5  CALL triangle( 0,0, 0,99, 99,0, 444 )
+10 for i = 0 to 9
+20   for j = 0 to 9
+30     for k = 0 to 9
+40       let kk = 9 - k
+44       call triangle (i*10,k+j*10,  9+i*10,j*10,  9+i*10,9+j*10, i+j*10+kk*100)
+70     next k
+80   next j
+90 next i
           </textarea>
           <input type=submit name=submit value=Submit>
         </form>
