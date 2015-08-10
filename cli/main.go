@@ -15,26 +15,26 @@ import (
 )
 
 func main() {
-  flag.BoolVar(&Debug, "d", false, "debug bit")
-  var filename string
-  flag.StringVar(&filename, "f", "", "basic source file")
-  flag.Parse()
+	flag.BoolVar(&Debug, "d", false, "debug bit")
+	var filename string
+	flag.StringVar(&filename, "f", "", "basic source file")
+	flag.Parse()
 
-  var prog []byte
-  var err error
-  if filename == "" {
-	  prog, err = ioutil.ReadAll(os.Stdin)
-  } else {
-	  prog, err = ioutil.ReadFile(filename)
-  }
+	var prog []byte
+	var err error
+	if filename == "" {
+		prog, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		prog, err = ioutil.ReadFile(filename)
+	}
 	if err != nil {
 		panic(err)
 	}
 	terp := NewTerp(string(prog))
-  d := draw.Register(terp)
+	d := draw.Register(terp)
 	terp.Run()
 	fmt.Printf("\n")
-  if d.HasImage() {
-    d.SavePng("/tmp/out.png")
-  }
+	if d.HasImage() {
+		d.SavePng("/tmp/out.png")
+	}
 }

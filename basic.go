@@ -5,7 +5,7 @@ package basic
 
 import (
 	`fmt`
-	//`os`
+	`math`
 	`regexp`
 	`sort`
 	`strconv`
@@ -19,12 +19,12 @@ var F = fmt.Sprintf
 
 var FindKeyword = regexp.MustCompile(`^(?i)(rem|let|dim|print|goto|gosub|return|if|then|else|for|to|next|stop|call)\b`).FindString
 
-var FindNewline = regexp.MustCompile("^[;\n]").FindString              // Semicolons are newlines.
-var FindWhite = regexp.MustCompile("^[ \t\r]*").FindString             // But not newlines.
-var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`).FindString // Like C identifiers.
-var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString  // Not yet E notaion.
-var FindPunc = regexp.MustCompile(`^[][(){},;]`).FindString            // Single char punc.
-var FindOp = regexp.MustCompile(`^[^A-Za-z0-9;\s]+`).FindString        // May be multichar op.
+var FindNewline = regexp.MustCompile("^[;\n]").FindString                                    // Semicolons are newlines.
+var FindWhite = regexp.MustCompile("^[ \t\r]*").FindString                                   // But not newlines.
+var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`).FindString                       // Like C identifiers.
+var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString                        // Not yet E notaion.
+var FindPunc = regexp.MustCompile(`^[][(){},;]`).FindString                                  // Single char punc.
+var FindOp = regexp.MustCompile(`^(==|!=|<=|>=|<>|[*][*]|<<|>>|[^A-Za-z0-9;\s])`).FindString // Contains some double-char sequences.
 
 type Kind int
 
@@ -81,7 +81,7 @@ type Terp struct {
 	S       string
 	F       float64
 	// Interpreter state.
-	G           map[string]float64
+	Globals     map[string]float64
 	ForFrames   []*ForFrame
 	GosubFrames []*GosubFrame
 	Lines       LineSlice
@@ -93,7 +93,7 @@ type Terp struct {
 func NewTerp(program string) *Terp {
 	t := &Terp{
 		Program:    program,
-		G:          make(map[string]float64),
+		Globals:    make(map[string]float64),
 		Extensions: make(map[string]Callable),
 	}
 	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
@@ -106,10 +106,24 @@ func NewTerp(program string) *Terp {
 }
 
 func (t *Terp) Run() {
-	t.G = make(map[string]float64)
+	t.Globals = make(map[string]float64)
 	t.ForFrames = make([]*ForFrame, 0)
 	i := 0
 	n := len(t.Lines)
+
+	if !Debug {
+		defer func() {
+			r := recover()
+			if r != nil {
+				s := F("%v", r)
+				if i >= 0 && i < len(t.Lines) {
+					s = F("%s; in line number %d", s, t.Lines[i].N)
+				}
+				panic(s)
+			}
+		}()
+	}
+
 Loop:
 	for i < n {
 		t.Line = t.Lines[i].N
@@ -214,44 +228,62 @@ func (o *Expr) String() string {
 }
 
 func (o *Expr) Eval(t *Terp) float64 {
+	var z float64
 	switch {
 	case o.Const != nil:
-		return *o.Const
+		z = *o.Const
 	case o.Var != nil:
-		return t.G[*o.Var]
+		z = t.Globals[*o.Var]
 	case o.Op != "":
 		a := o.A.Eval(t)
 		b := o.B.Eval(t)
 		switch o.Op {
 		case "+":
-			return a + b
+			z = a + b
 		case "-":
-			return a - b
+			z = a - b
 		case "*":
-			return a * b
+			z = a * b
 		case "/":
-			return a / b
+			z = a / b
 		case "%":
-			return float64(TrimInt(a) % TrimInt(b))
-		case "==":
-			return Truth(a == b)
+			z = float64(SnapToInt(a) % SnapToInt(b))
+		case "==", "=":
+			z = Truth(a == b)
+		case "!=", "<>":
+			z = Truth(a != b)
+		case "<=":
+			z = Truth(a <= b)
+		case ">=":
+			z = Truth(a >= b)
+		case "<":
+			z = Truth(a < b)
+		case ">":
+			z = Truth(a > b)
 		default:
 			panic(F("bad op: %q", o.Op))
 		}
 	default:
 		panic("bad expr")
 	}
+	if math.IsInf(z, 0) {
+		panic("Result is Infinity")
+	}
+	if math.IsNaN(z) {
+		panic("Result is Not a Number")
+	}
+	return z
 }
 
-func TrimInt(f float64) int {
-	println(F("TrimInt <<< %g", f))
+func SnapToInt(f float64) int {
+	println(F("SnapToInt <<< %g", f))
 	h := 0.5
 	if f < 0 {
 		h = -0.5
 	}
 	i := int(f + h)
 	d := f - float64(i)
-	println(F("TrimInt >>> %i +- %f", i, d))
+	println(F("SnapToInt >>> %i +- %f", i, d))
 	if d < -Epsilon || d > Epsilon {
 		panic(F("Not an integer: %g", f))
 	}
@@ -343,7 +375,7 @@ func (o *LetCmd) Eval(t *Terp) int {
 	if Debug {
 		println(F("## LET %s = %g", o.Var, x))
 	}
-	t.G[o.Var] = x
+	t.Globals[o.Var] = x
 	return 0
 }
 func (o *LetCmd) String() string { return F("LET %s = %v", o.Var, o.X) }
@@ -371,7 +403,7 @@ func (o *NextCmd) Eval(t *Terp) int {
 	}
 	fr := t.ForFrames[i]
 	fr.Value += 1
-	t.G[o.Var] = fr.Value
+	t.Globals[o.Var] = fr.Value
 	if fr.Value > fr.Max {
 		t.ForFrames = t.ForFrames[:i]
 		return 0
@@ -393,7 +425,7 @@ func (o *ForCmd) Eval(t *Terp) int {
 	if Debug {
 		println(F("## FOR %s = %g TO %g", o.Var, begin, end))
 	}
-	t.G[o.Var] = begin
+	t.Globals[o.Var] = begin
 	fr := &ForFrame{Var: o.Var, Value: begin, Max: end, Line: t.Line + 1}
 	t.ForFrames = append(t.ForFrames, fr)
 	return 0
@@ -408,7 +440,7 @@ type IfCmd struct {
 func (o *IfCmd) String() string { return F("IF %v THEN %d ELSE %d", o.Cond, o.Then, o.Else) }
 func (o *IfCmd) Eval(t *Terp) int {
 	cond := o.Cond.Eval(t)
-	if TrimInt(cond) == 0 {
+	if SnapToInt(cond) == 0 {
 		return o.Else
 	}
 	return o.Then
@@ -420,37 +452,31 @@ type Cmd interface {
 }
 
 func (lex *Terp) ParsePrim() *Expr {
-	z := &Expr{}
 	switch lex.K {
 	case Var:
+		z := &Expr{}
 		s := lex.S
 		lex.Advance()
 		z.Var = &s
+		return z
 	case Number:
+		z := &Expr{}
 		f := lex.F
 		lex.Advance()
 		z.Const = &f
-	default:
-		panic("expected prim")
+		return z
+	case Punc:
+		if lex.S == "(" {
+			lex.Advance()
+			z := lex.ParseExpr()
+			lex.ParseMustSym(")")
+			return z
+		}
 	}
-	return z
+	panic("expected prim")
 }
 func (lex *Terp) ParseExpr() *Expr {
 	return lex.ParseRelop()
-	/*
-		a := lex.ParsePrim()
-		for lex.K == Op || lex.K == Number && lex.S[0] == '-' {
-			op := lex.S
-			if lex.K == Number { // Negative constant (ambiguous "-" sign)
-				op = "+"
-			} else {
-				lex.Advance() // Consume op.
-			}
-			b := lex.ParsePrim() // May be the negative constant.
-			a = &Expr{A: a, Op: op, B: b}
-		}
-		return a
-	*/
 }
 
 var MatchProduct = regexp.MustCompile(`^([*]|/|%)$`).MatchString
@@ -570,11 +596,11 @@ Loop:
 		case "if":
 			cond := lex.ParseExpr()
 			lex.ParseMustKeyword("then")
-			ifTrue := TrimInt(lex.ParseNumber())
+			ifTrue := SnapToInt(lex.ParseNumber())
 			ifFalse := 0
 			if lex.S == "else" {
 				lex.ParseMustKeyword("else")
-				ifFalse = TrimInt(lex.ParseNumber())
+				ifFalse = SnapToInt(lex.ParseNumber())
 			}
 			c = &IfCmd{Cond: cond, Then: ifTrue, Else: ifFalse}
 		case "call":
