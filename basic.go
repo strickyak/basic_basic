@@ -13,8 +13,10 @@ import (
 	`time`
 )
 
+const Epsilon = 0.000001 // For snapping to integer.
+const RecursionLimit = 1000
+
 var Debug bool
-var Epsilon = 0.000001 // For snapping to integer.
 
 var F = fmt.Sprintf
 
@@ -118,7 +120,7 @@ func (t *Terp) SetExpiration(duration string) {
 
 func (t *Terp) CheckExpiration() {
 	if t.Expiration != nil && time.Now().After(*t.Expiration) {
-		panic("time.Now().After(*t.Expiration)")
+		panic("TIMEOUT: Your program ran too long.")
 	}
 }
 
@@ -324,6 +326,9 @@ type GosubCmd struct {
 
 func (o *GosubCmd) String() string { return F("Gosub %d", o.CallLine) }
 func (o *GosubCmd) Eval(t *Terp) int {
+	if len(t.GosubFrames) >= RecursionLimit {
+		panic(F("Recursion Limit: You called GOSUB too many times."))
+	}
 	fr := &GosubFrame{t.Line + 1} // Return Address.
 	t.GosubFrames = append(t.GosubFrames, fr)
 	return o.CallLine // Call address.
