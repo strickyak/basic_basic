@@ -10,10 +10,11 @@ import (
 	`sort`
 	`strconv`
 	`strings`
+	`time`
 )
 
 var Debug bool
-var Epsilon = 0.000001
+var Epsilon = 0.000001 // For snapping to integer.
 
 var F = fmt.Sprintf
 
@@ -88,6 +89,7 @@ type Terp struct {
 	Line        int
 	LastPrinted float64
 	Extensions  map[string]Callable
+	Expiration  *time.Time
 }
 
 func NewTerp(program string) *Terp {
@@ -103,6 +105,21 @@ func NewTerp(program string) *Terp {
 	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	sort.Sort(t.Lines)
 	return t
+}
+
+func (t *Terp) SetExpiration(duration string) {
+	dur, err := time.ParseDuration(duration)
+	if err != nil {
+		panic(err)
+	}
+	z := time.Now().Add(dur)
+	t.Expiration = &z
+}
+
+func (t *Terp) CheckExpiration() {
+	if t.Expiration != nil && time.Now().After(*t.Expiration) {
+		panic("time.Now().After(*t.Expiration)")
+	}
 }
 
 func (t *Terp) Run() {
@@ -133,6 +150,7 @@ Loop:
 
 		if j > 0 {
 			// Branching instruction.
+			t.CheckExpiration()
 			for i = 0; i < n; i++ {
 				println(F("%d: look got %d want %d", i, t.Lines[i].N, j))
 				if t.Lines[i].N >= j {

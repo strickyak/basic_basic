@@ -38,6 +38,7 @@ func Render(w http.ResponseWriter, req *http.Request) {
 		code = x[0]
 
 		terp := NewTerp(code)
+		terp.SetExpiration("30s")
 		d := draw.Register(terp)
 		terp.Run()
 		Printf("\n")
