@@ -66,6 +66,36 @@ func Render(w http.ResponseWriter, req *http.Request) {
           <input type=submit name=submit value=Submit>
         </form>
 
+<p><br><br><br>
+<pre>
+This is a simple BASIC computer.
+
+The only data type is floating point numbers.
+
+THe only output is the "CALL triangle" statement,
+which draws colored triangles on a canvas with
+coordinates [0 .. 100) on both x and y axes.
+
+Statement ::= LineNumber Stmt
+Stmt := REM remark...
+  | LET var := expr
+  | GOTO n
+  | IF expr THEN y
+  | IF expr THEN y ELSE n
+  | FOR var = a TO b
+  | NEXT var
+  | GOSUB n
+  | RETURN
+  | CALL triangle( x1, y1, x2, y2, x3, y3, rgb )
+       ... where n & y are line numbers
+       ... where rgb is decimal (r=hundreds, g=tens, b=ones)
+expr ::= sum relop expr     ...where relop can be == != < > <= >=
+sum ::= prod addop sum      ...where addop can be + -
+prod ::= prim mulop prod    ...where mulop can be * / %%
+prim ::= number
+  | var
+  | ( expr )
+</pre>
       </body></html>`)
 	}
 }
