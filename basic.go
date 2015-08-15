@@ -554,23 +554,23 @@ func (lex *Terp) ParseProgram() []Line {
 	var z []Line
 Loop:
 	for {
+		n++ // Increment default line number.
 		for lex.K == Newline {
 			lex.Advance()
 		}
 		println(F("LOOP %d %q", lex.P, lex.Program[lex.P:]))
 		// Want line number.
 		switch lex.K {
+		// default: use the default line number.
 		case EOF:
 			break Loop
 		case Newline:
 			continue
 		case Number:
 			n = int(lex.F)
-		default:
-			panic("expected line number")
+			lex.Advance()
 		}
 		println(F("LINE %d", n))
-		lex.Advance()
 		// Want command.
 		switch lex.K {
 		case Keyword:
