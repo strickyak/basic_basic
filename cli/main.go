@@ -14,6 +14,10 @@ import (
 	"os"
 )
 
+func putchar(ch byte) {
+  fmt.Printf("<%c>", ch)
+}
+
 func main() {
 	flag.BoolVar(&Debug, "d", false, "debug bit")
 	var filename string
@@ -30,7 +34,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	terp := NewTerp(string(prog))
+	terp := NewTerp(string(prog), putchar)
 	d := draw.Register(terp)
 	terp.Run()
 	fmt.Printf("\n")

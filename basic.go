@@ -5,8 +5,10 @@ package basic
 
 import (
 	`fmt`
+	`log`
 	`math`
 	`regexp`
+	`runtime/debug`
 	`sort`
 	`strconv`
 	`strings`
@@ -92,19 +94,18 @@ type Terp struct {
 	LastPrinted float64
 	Extensions  map[string]Callable
 	Expiration  *time.Time
+	Putchar     func(ch byte)
 }
 
-func NewTerp(program string) *Terp {
+func NewTerp(program string, putchar func(ch byte)) *Terp {
 	t := &Terp{
 		Program:    program,
 		Globals:    make(map[string]float64),
 		Extensions: make(map[string]Callable),
+		Putchar:    putchar,
 	}
-	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	t.Advance()
-	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	t.Lines = t.ParseProgram()
-	println(F("NewTerp-- P=%d K=%v S=%s", t.P, t.K, t.S))
 	sort.Sort(t.Lines)
 	return t
 }
@@ -134,6 +135,9 @@ func (t *Terp) Run() {
 		defer func() {
 			r := recover()
 			if r != nil {
+				log.Printf("\n\nERROR: %v\n", r)
+				debug.PrintStack()
+				log.Printf("\n\n", r)
 				s := F("%v", r)
 				if i >= 0 && i < len(t.Lines) {
 					s = F("%s; in line number %d", s, t.Lines[i].N)
@@ -365,7 +369,10 @@ func (o *PrintCmd) Eval(t *Terp) int {
 	if Debug {
 		println(F("## PRINT %g", t.LastPrinted))
 	}
-	fmt.Printf("%g ", t.LastPrinted)
+	bb := []byte(fmt.Sprintf("%g ", t.LastPrinted))
+	for _, b := range bb {
+		t.Putchar(b)
+	}
 	return 0
 }
 

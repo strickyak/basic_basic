@@ -6,10 +6,8 @@ import "github.com/strickyak/basic_basic/draw"
 import (
 	"flag"
 	. "fmt"
-	//"io/ioutil"
 	"log"
 	"net/http"
-	//"os"
 )
 
 func main() {
@@ -37,9 +35,16 @@ func Render(w http.ResponseWriter, req *http.Request) {
 	if x, ok := req.Form["code"]; ok {
 		code = x[0]
 
-		terp := NewTerp(code)
+    var putchar func(ch byte)
+    forward := func(ch byte) {
+      putchar(ch)
+    }
+
+		terp := NewTerp(code, forward)
 		terp.SetExpiration("30s")
 		d := draw.Register(terp)
+    putchar = d.Putchar
+
 		terp.Run()
 		Printf("\n")
 		w.Header().Set("Content-Type", "image/png")
