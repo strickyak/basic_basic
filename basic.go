@@ -150,35 +150,25 @@ func (t *Terp) Run() {
 Loop:
 	for i < n {
 		t.Line = t.Lines[i].N
-		println(F("%d: eval<< %v", i, t.Lines[i]))
 		j := t.Lines[i].Cmd.Eval(t)
-		println(F("%d: eval>>%d", i, j))
 
 		if j > 0 {
 			// Branching instruction.
 			t.CheckExpiration()
 			for i = 0; i < n; i++ {
-				println(F("%d: look got %d want %d", i, t.Lines[i].N, j))
 				if t.Lines[i].N >= j {
-					println(F("%d: CONTINUE got %d want %d", i, t.Lines[i].N, j))
 					continue Loop
 				}
 			}
-			println(F("FALLOUT"))
 		} else {
 			// Proceed to next instrution.
 			i++
-			println(F("NEXT"))
 		}
 	}
-	println(F("END"))
 }
 
 func (o *Terp) Advance() {
 	o.Advance1()
-	if Debug {
-		println(F("[[LEX %5d:   %8v LEX %-10q ... %q ]]", o.P, o.K, o.S, o.Program[o.P:]))
-	}
 }
 func (o *Terp) Advance1() {
 	m := FindWhite(o.Program[o.P:])
@@ -300,14 +290,12 @@ func (o *Expr) Eval(t *Terp) float64 {
 }
 
 func SnapToInt(f float64) int {
-	println(F("SnapToInt <<< %g", f))
 	h := 0.5
 	if f < 0 {
 		h = -0.5
 	}
 	i := int(f + h)
 	d := f - float64(i)
-	println(F("SnapToInt >>> %i +- %f", i, d))
 	if d < -Epsilon || d > Epsilon {
 		panic(F("Not an integer: %g", f))
 	}
@@ -366,9 +354,6 @@ type PrintCmd struct {
 func (o *PrintCmd) String() string { return F("Print %v", o.X) }
 func (o *PrintCmd) Eval(t *Terp) int {
 	t.LastPrinted = o.X.Eval(t)
-	if Debug {
-		println(F("## PRINT %g", t.LastPrinted))
-	}
 	bb := []byte(fmt.Sprintf("%g ", t.LastPrinted))
 	for _, b := range bb {
 		t.Putchar(b)
@@ -402,9 +387,6 @@ type LetCmd struct {
 
 func (o *LetCmd) Eval(t *Terp) int {
 	x := o.X.Eval(t)
-	if Debug {
-		println(F("## LET %s = %g", o.Var, x))
-	}
 	t.Globals[o.Var] = x
 	return 0
 }
@@ -452,9 +434,6 @@ func (o *ForCmd) String() string { return F("FOR %s = %v TO %v", o.Var, o.Begin,
 func (o *ForCmd) Eval(t *Terp) int {
 	begin := o.Begin.Eval(t)
 	end := o.End.Eval(t)
-	if Debug {
-		println(F("## FOR %s = %g TO %g", o.Var, begin, end))
-	}
 	t.Globals[o.Var] = begin
 	fr := &ForFrame{Var: o.Var, Value: begin, Max: end, Line: t.Line + 1}
 	t.ForFrames = append(t.ForFrames, fr)
@@ -517,12 +496,10 @@ func (lex *Terp) ParseProduct() *Expr {
 	a := lex.ParsePrim()
 	for lex.K == Op && MatchProduct(lex.S) {
 		op := lex.S
-		println(F("ParseProduct consumes op %q", op))
 		lex.Advance()           // Consume op.
 		b := lex.ParseProduct() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
-	println(F("ParseProduct >>> %v", a))
 	return a
 }
 func (lex *Terp) ParseSum() *Expr {
@@ -530,16 +507,13 @@ func (lex *Terp) ParseSum() *Expr {
 	for lex.K == Op && MatchSum(lex.S) || lex.K == Number && lex.S[0] == '-' {
 		op := lex.S
 		if lex.K == Number { // Negative constant (ambiguous "-" sign)
-			println(F("ParseSum Ambiguous %q", op))
 			op = "+"
 		} else {
-			println(F("ParseSum consumes op %q", op))
 			lex.Advance() // Consume op.
 		}
 		b := lex.ParseSum() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
-	println(F("ParseSum >>> %v", a))
 	return a
 }
 func (lex *Terp) ParseRelop() *Expr {
@@ -550,7 +524,6 @@ func (lex *Terp) ParseRelop() *Expr {
 		b := lex.ParseRelop() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
-	println(F("ParseRelop >>> %v", a))
 	return a
 }
 
@@ -565,7 +538,6 @@ Loop:
 		for lex.K == Newline {
 			lex.Advance()
 		}
-		println(F("LOOP %d %q", lex.P, lex.Program[lex.P:]))
 		// Want line number.
 		switch lex.K {
 		// default: use the default line number.
@@ -577,7 +549,6 @@ Loop:
 			n = int(lex.F)
 			lex.Advance()
 		}
-		println(F("LINE %d", n))
 		// Want command.
 		switch lex.K {
 		case Keyword:
@@ -588,7 +559,6 @@ Loop:
 		default:
 			panic("expected command after line number")
 		}
-		println(F("KEYWORD %s", w))
 		switch strings.ToLower(w) {
 		case ";":
 			c = &NopCmd{}
@@ -635,20 +605,16 @@ Loop:
 			c = &IfCmd{Cond: cond, Then: ifTrue, Else: ifFalse}
 		case "call":
 			name := strings.ToLower(lex.ParseVar())
-			println("name=", name)
 			lex.ParseMustSym("(")
 			var args []*Expr
 			for {
 				for lex.S == "," {
-					println("comma")
 					lex.Advance()
 				}
 				if lex.S == ")" {
 					break
 				}
-				println(" not close paren ", lex.S)
 				a := lex.ParseExpr()
-				println("  got arg ", a)
 				args = append(args, a)
 			}
 			lex.ParseMustSym(")")

@@ -4,6 +4,7 @@ import . "github.com/strickyak/basic_basic"
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
@@ -79,10 +80,10 @@ func TestOne(t *testing.T) {
 	Debug = true
 	for i, pf := range progs {
 		t.Logf("Test Program %d: %q", i, pf.Prog)
-		terp := NewTerp(pf.Prog)
+		terp := NewTerp(pf.Prog, func(ch byte) { os.Stdout.Write([]byte{ch}) })
 		terp.Run()
-		fmt.Printf("\n")
 		final := terp.LastPrinted
+		fmt.Printf("\n === %q ==> %g\n", pf.Prog, final)
 		if final != pf.Final {
 			t.Errorf("bad final: got %g want %g", final, pf.Final)
 		}

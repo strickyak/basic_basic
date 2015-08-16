@@ -25,24 +25,24 @@ func Decimal2RGB(dec float64) (byte, byte, byte) {
 
 type drawing struct {
 	canvas *canvas.Canvas
-  px, py float64
+	px, py float64
 }
 
 func (o *drawing) init() {
 	if o.canvas == nil {
 		o.canvas = canvas.NewCanvas(WIDTH, HEIGHT)
-    o.px = 0.0 + MARGIN
-    o.py = 100.0 - MARGIN
+		o.px = 0.0 + MARGIN
+		o.py = 100.0 - MARGIN
 	}
 }
 
 func (o *drawing) Putchar(ch byte) {
-  o.init()
-  start := int(ch)-32
-  if start<0 || start>96 {
-    start=3
-  }
-  start *= 5
+	o.init()
+	start := int(ch) - 32
+	if start < 0 || start > 96 {
+		start = 3
+	}
+	start *= 5
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 7; j++ {
 			x, y := o.px+float64(i)*SPOTSIZE, o.py-float64(j)*SPOTSIZE
@@ -56,14 +56,14 @@ func (o *drawing) Putchar(ch byte) {
 				canvas.RGB(c, c, c))
 		}
 	}
-  o.px += SPOTSIZE * 7
-  if o.px > 100 - MARGIN {
-    o.px = MARGIN
-    o.py -= SPOTSIZE*10
-    if o.py < MARGIN {
-      o.py = 100 - MARGIN
-    }
-  }
+	o.px += SPOTSIZE * 7
+	if o.px > 100-MARGIN {
+		o.px = MARGIN
+		o.py -= SPOTSIZE * 10
+		if o.py < MARGIN {
+			o.py = 100 - MARGIN
+		}
+	}
 }
 
 func (o *drawing) clear(t *basic.Terp, args []float64) float64 {
@@ -119,7 +119,7 @@ func (o *drawing) fonttest(t *basic.Terp, _ []float64) float64 {
 			x0 += 1
 		}
 		if i%60 == 59 {
-			x0, y0 = 5 - float64(i), y0-10
+			x0, y0 = 5-float64(i), y0-10
 		}
 	}
 	return 0.0
