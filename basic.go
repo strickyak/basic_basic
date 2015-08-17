@@ -229,6 +229,7 @@ type Expr struct {
 	Var   *string
 	A, B  *Expr
 	Op    string
+  Subs  []*Expr
 }
 
 func (o *Expr) String() string {
@@ -492,8 +493,31 @@ var MatchProduct = regexp.MustCompile(`^([*]|/|%)$`).MatchString
 var MatchSum = regexp.MustCompile(`^([+]|-|\^)$`).MatchString
 var MatchRelop = regexp.MustCompile(`^(=|==|<|<=|>|>=|!=|<>)$`).MatchString
 
-func (lex *Terp) ParseProduct() *Expr {
+// ParseComposite handles subscripting, and someday function calls.
+func (lex *Terp) ParseComposite() *Expr {
 	a := lex.ParsePrim()
+	if lex.S == "(" {
+		lex.Advance()           // Consume paren.
+    var subs []*Expr
+    for lex.S != ")" {
+
+      b := lex.ParseExpr()
+      subs = append(subs, b)
+
+      if lex.S != "," && lex.S != ")" {
+        panic("Expected , or ) after expr in subscript")
+      }
+      if lex.S == "," {
+        lex.Advance()
+      }
+    }
+    a = &Expr{A: a, Subs: subs}
+	}
+	return a
+}
+
+func (lex *Terp) ParseProduct() *Expr {
+	a := lex.ParseComposite()
 	for lex.K == Op && MatchProduct(lex.S) {
 		op := lex.S
 		lex.Advance()           // Consume op.
