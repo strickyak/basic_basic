@@ -50,6 +50,7 @@ func main() {
 	Tmpl.Parse(TEMPLATES)
 
 	http.HandleFunc("/", handler)
+	log.Println("http.ListenAndServe.")
 	err := http.ListenAndServe(":12345", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
@@ -170,7 +171,9 @@ coordinates [0 .. 100) on both x and y axes.
 
 Statement ::= LineNumber Stmt
 Stmt := REM remark...
+  | DIM arr(size), matrix(width,heigth)
   | LET var := expr
+  | LET arr(i, j...) := expr
   | GOTO n
   | IF expr THEN y
   | IF expr THEN y ELSE n
@@ -183,7 +186,9 @@ Stmt := REM remark...
        ... where rgb is decimal (r=hundreds, g=tens, b=ones)
 expr ::= sum relop expr     ...where relop can be == != < > <= >=
 sum ::= prod addop sum      ...where addop can be + -
-prod ::= prim mulop prod    ...where mulop can be * / %%
+prod ::= composite mulop prod    ...where mulop can be * / %%
+composite ::= prim
+  | arr(i, j...)
 prim ::= number
   | var
   | ( expr )

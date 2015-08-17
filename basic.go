@@ -7,6 +7,7 @@ import (
 	`fmt`
 	`log`
 	`math`
+	`os`
 	`regexp`
 	`runtime/debug`
 	`sort`
@@ -86,7 +87,8 @@ type Terp struct {
 	S       string
 	F       float64
 	// Interpreter state.
-	Globals     map[string]float64
+	Scalars     map[string]float64
+	Arrays      map[string]interface{}
 	ForFrames   []*ForFrame
 	GosubFrames []*GosubFrame
 	Lines       LineSlice
@@ -100,7 +102,8 @@ type Terp struct {
 func NewTerp(program string, putchar func(ch byte)) *Terp {
 	t := &Terp{
 		Program:    program,
-		Globals:    make(map[string]float64),
+		Scalars:    make(map[string]float64),
+		Arrays:     make(map[string]interface{}),
 		Extensions: make(map[string]Callable),
 		Putchar:    putchar,
 	}
@@ -125,11 +128,37 @@ func (t *Terp) CheckExpiration() {
 	}
 }
 
+func AllocArray(dims []int) interface{} {
+	switch len(dims) {
+	case 0:
+		panic("missing dim")
+	case 1:
+		d := dims[0]
+		// Allocate 1 extra, cauz this is Basic.
+		return make([]float64, d+1)
+	default:
+		d := dims[0]
+		// Allocate 1 extra, cauz this is Basic.
+		vec := make([]interface{}, d+1)
+		for i := 0; i <= d; i++ {
+			vec[i] = AllocArray(dims[1:])
+		}
+		return vec
+	}
+}
+
 func (t *Terp) Run() {
-	t.Globals = make(map[string]float64)
+	t.Scalars = make(map[string]float64)
 	t.ForFrames = make([]*ForFrame, 0)
 	i := 0
 	n := len(t.Lines)
+
+	// Allocate Arrays.
+	for _, line := range t.Lines {
+		if dim, ok := line.Cmd.(*DimCmd); ok {
+			t.Arrays[dim.Var] = AllocArray(dim.Dims)
+		}
+	}
 
 	if !Debug {
 		defer func() {
@@ -229,7 +258,7 @@ type Expr struct {
 	Var   *string
 	A, B  *Expr
 	Op    string
-  Subs  []*Expr
+	Subs  []*Expr
 }
 
 func (o *Expr) String() string {
@@ -245,10 +274,53 @@ func (o *Expr) String() string {
 func (o *Expr) Eval(t *Terp) float64 {
 	var z float64
 	switch {
+	case o.Subs != nil:
+		if o.A.Var == nil {
+			panic("Expected var name for subscripting")
+		}
+		name := *o.A.Var
+		if name == "" {
+			panic("Expected name of array")
+		}
+
+		thing, ok := t.Arrays[name]
+		if !ok {
+			panic("No such array: " + name)
+		}
+
+		subs := o.Subs
+		for len(subs) > 0 {
+			e := SnapToInt(subs[0].Eval(t))
+			if e < 0 {
+				panic(F("negative subscript: array %s got %d", name, e))
+			}
+			switch t := thing.(type) {
+			case []interface{}:
+				if len(subs) <= 1 {
+					panic("too few subscripts for array: " + name)
+				}
+				if e > len(t) {
+					panic(F("subscript too big: array %q got %d want <=%d", name, e, len(t)))
+				}
+				thing = t[e]
+			case []float64:
+				if len(subs) != 1 {
+					panic("too many subscripts for array: " + name)
+				}
+				if e > len(t) {
+					panic(F("subscript too big: array %q got %d want <=%d", name, e, len(t)))
+				}
+				return t[e]
+			default:
+			}
+			subs = subs[1:]
+		}
+		panic("notreached")
+
 	case o.Const != nil:
 		z = *o.Const
 	case o.Var != nil:
-		z = t.Globals[*o.Var]
+		z = t.Scalars[*o.Var]
 	case o.Op != "":
 		a := o.A.Eval(t)
 		b := o.B.Eval(t)
@@ -381,17 +453,68 @@ func (o *CallCmd) Eval(t *Terp) int {
 	return 0
 }
 
+type DimCmd struct {
+	Var  string
+	Dims []int
+}
+
+func (o *DimCmd) Eval(t *Terp) int {
+	return 0
+}
+func (o *DimCmd) String() string { return F("DIM %s (%v)", o.Var, o.Dims) }
+
 type LetCmd struct {
-	Var string
-	X   *Expr
+	Dest *Expr
+	X    *Expr
 }
 
 func (o *LetCmd) Eval(t *Terp) int {
-	x := o.X.Eval(t)
-	t.Globals[o.Var] = x
+	x := o.X.Eval(t) // Eval rhs first.
+	if o.Dest.Var == nil {
+		name := *o.Dest.A.Var
+		thing, ok := t.Arrays[name]
+		if !ok {
+			panic(F("No such array: %q", name))
+		}
+		subs := o.Dest.Subs
+		for len(subs) > 0 {
+			println(F("thing = %v", thing))
+			println(F("sub[0]=%v", subs[0]))
+			e := SnapToInt(subs[0].Eval(t))
+			println(F("e=%v", e))
+			if e < 0 {
+				panic(F("negative subscript: array %s got %d", name, e))
+			}
+			switch t := thing.(type) {
+			case []interface{}:
+				if len(subs) <= 1 {
+					panic("too few subscripts for array: " + name)
+				}
+				if e > len(t) {
+					panic(F("subscript too big: array %q got %d want <=%d", name, e, len(t)))
+				}
+				thing = t[e]
+			case []float64:
+				if len(subs) != 1 {
+					panic("too many subscripts for array: " + name)
+				}
+				if e > len(t) {
+					panic(F("subscript too big: array %q got %d want <=%d", name, e, len(t)))
+				}
+				t[e] = x
+				return 0
+			default:
+			}
+			subs = subs[1:]
+		}
+		println(F("THING = %v", thing))
+		panic(F("notreached: Subs=%v", o.Dest.Subs))
+	} else {
+		t.Scalars[*o.Dest.Var] = x
+	}
 	return 0
 }
-func (o *LetCmd) String() string { return F("LET %s = %v", o.Var, o.X) }
+func (o *LetCmd) String() string { return F("LET %s = %v", o.Dest, o.X) }
 
 type ForFrame struct {
 	Var   string
@@ -416,7 +539,7 @@ func (o *NextCmd) Eval(t *Terp) int {
 	}
 	fr := t.ForFrames[i]
 	fr.Value += 1
-	t.Globals[o.Var] = fr.Value
+	t.Scalars[o.Var] = fr.Value
 	if fr.Value > fr.Max {
 		t.ForFrames = t.ForFrames[:i]
 		return 0
@@ -435,7 +558,7 @@ func (o *ForCmd) String() string { return F("FOR %s = %v TO %v", o.Var, o.Begin,
 func (o *ForCmd) Eval(t *Terp) int {
 	begin := o.Begin.Eval(t)
 	end := o.End.Eval(t)
-	t.Globals[o.Var] = begin
+	t.Scalars[o.Var] = begin
 	fr := &ForFrame{Var: o.Var, Value: begin, Max: end, Line: t.Line + 1}
 	t.ForFrames = append(t.ForFrames, fr)
 	return 0
@@ -497,21 +620,22 @@ var MatchRelop = regexp.MustCompile(`^(=|==|<|<=|>|>=|!=|<>)$`).MatchString
 func (lex *Terp) ParseComposite() *Expr {
 	a := lex.ParsePrim()
 	if lex.S == "(" {
-		lex.Advance()           // Consume paren.
-    var subs []*Expr
-    for lex.S != ")" {
+		lex.Advance() // Consume paren.
+		var subs []*Expr
+		for lex.S != ")" {
 
-      b := lex.ParseExpr()
-      subs = append(subs, b)
+			b := lex.ParseExpr()
+			subs = append(subs, b)
 
-      if lex.S != "," && lex.S != ")" {
-        panic("Expected , or ) after expr in subscript")
-      }
-      if lex.S == "," {
-        lex.Advance()
-      }
-    }
-    a = &Expr{A: a, Subs: subs}
+			if lex.S != "," && lex.S != ")" {
+				panic("Expected , or ) after expr in subscript")
+			}
+			if lex.S == "," {
+				lex.Advance()
+			}
+		}
+		lex.Advance()
+		a = &Expr{A: a, Subs: subs}
 	}
 	return a
 }
@@ -552,9 +676,19 @@ func (lex *Terp) ParseRelop() *Expr {
 }
 
 func (lex *Terp) ParseProgram() []Line {
+	var n int // the line number
+	defer func() {
+		r := recover()
+		if r != nil {
+			r = fmt.Sprintf("Parse Error: %v:\n... Line %d, Before code: %q", r, n, lex.Program[lex.P:])
+			fmt.Fprintf(os.Stderr, "\n$v\n", r)
+			debug.PrintStack()
+			panic(r)
+		}
+		return
+	}()
 	var c Cmd
 	var w string // the command
-	var n int    // the line number
 	var z []Line
 Loop:
 	for {
@@ -602,11 +736,27 @@ Loop:
 		case "print":
 			x := lex.ParseExpr()
 			c = &PrintCmd{X: x}
-		case "let":
+		case "dim":
 			v := lex.ParseVar()
+			lex.ParseMustSym("(")
+			var dims []int
+			for lex.S != ")" {
+				n := int(lex.ParseNumber())
+				dims = append(dims, n)
+				if lex.S != ")" && lex.S != "," {
+					panic("expected , or ) after dimension")
+				}
+				if lex.S == "," {
+					lex.Advance()
+				}
+			}
+			lex.Advance()
+			c = &DimCmd{Var: v, Dims: dims}
+		case "let":
+			v := lex.ParseDestination()
 			lex.ParseMustSym("=")
 			x := lex.ParseExpr()
-			c = &LetCmd{Var: v, X: x}
+			c = &LetCmd{Dest: v, X: x}
 		case "next":
 			v := lex.ParseVar()
 			c = &NextCmd{Var: v}
@@ -656,6 +806,18 @@ Loop:
 	}
 	return z
 }
+
+func (lex *Terp) ParseDestination() *Expr {
+	a := lex.ParseComposite()
+	if a.Var != nil && *a.Var != "" {
+		return a // Scalar destination.
+	}
+	if a.Subs != nil && a.A.Var != nil && *a.A.Var != "" {
+		return a // Subscripted destination.
+	}
+	panic(F("Illegal destination in assignment: %v", a))
+}
+
 func (lex *Terp) ParseVar() string {
 	Check(lex.K == Var, "expected variable name")
 	s := lex.S
