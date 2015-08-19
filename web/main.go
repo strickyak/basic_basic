@@ -214,6 +214,8 @@ Stmt := REM remark...
   | NEXT var
   | GOSUB n
   | RETURN
+  | PRINT expr
+  | PRINT strlit
   | CALL triangle( x1, y1, x2, y2, x3, y3, rgb )
        ... where n & y are line numbers
        ... where rgb is decimal (r=hundreds, g=tens, b=ones)
@@ -225,6 +227,7 @@ composite ::= prim
 prim ::= number
   | var
   | ( expr )
+strlit ::= "AnyASCIIButDoubleADoubleQuote"
 </pre>
       </body></html>
     </body></html>
