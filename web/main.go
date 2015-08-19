@@ -10,6 +10,7 @@ import (
 	. "fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 
 var Tmpl *template.Template
 
+var THRU_CRUNCH = regexp.MustCompile("(?s).*\n#[# ]+\n(.*)")
 var NON_ALPHANUM = regexp.MustCompile("[^A-Za-z0-9_]")
 
 func encodeChar(s string) string {
@@ -109,17 +111,22 @@ func handler(w http.ResponseWriter, req *http.Request) {
 		putchar = d.Putchar
 
 		if f3, ok3 := req.Form["progname"]; ok3 {
-			if f3[0] == "" {
-				f3[0] = "untitled"
+			name := f3[0]
+			if name == "" {
+				name = "untitled"
 			}
-			fd, err := os.OpenFile(CurlyEncode(f3[0])+".bas", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			name = strings.Trim(name, " \t\r\n")
+			flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+			if strings.HasSuffix(name, "!") {
+				flags |= os.O_EXCL
+			}
+			fd, err := os.OpenFile(CurlyEncode(name)+".bas", flags, 0666)
 			if err != nil {
 				panic(err)
 			}
 			w := bufio.NewWriter(fd)
 			Fprintf(w, "###### ###### ###### ###### ###### ######\n")
 			Fprintf(w, "%s\n", strings.Replace(f1[0], "\r", "", -1))
-			Fprintf(w, "###### ###### ###### ###### ###### ######\n")
 			w.Flush()
 			fd.Close()
 		}
@@ -135,7 +142,16 @@ func handler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		dict := make(map[string]interface{})
 		if f2, ok2 := req.Form["load"]; ok2 {
-			dict["Code"] = f2[0]
+			code, err := ioutil.ReadFile(strings.Trim(f2[0], " \t\n\r"))
+			s := "\n" + string(code)
+			if err != nil {
+				panic(err)
+			}
+			m := THRU_CRUNCH.FindStringSubmatch(s)
+			if m != nil {
+				s = m[1]
+			}
+			dict["Code"] = s
 		} else {
 			dict["Code"] = template.HTML(DEMO)
 		}
