@@ -433,7 +433,7 @@ type PrintCmd struct {
 func (o *PrintCmd) String() string { return F("Print %v", o.X) }
 func (o *PrintCmd) Eval(t *Terp) int {
 	t.LastPrinted = o.X.Eval(t)
-	bb := []byte(fmt.Sprintf("%g ", t.LastPrinted))
+	bb := []byte(strings.Trim(fmt.Sprintf("%.15g", t.LastPrinted), " ") + " ")
 	for _, b := range bb {
 		t.Putchar(b)
 	}
