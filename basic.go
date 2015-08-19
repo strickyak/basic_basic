@@ -176,17 +176,23 @@ func (t *Terp) Run() {
 		}()
 	}
 
-Loop:
+  gotoCache := make(map[int]int) // Line Num Dest -> Lines Slice Index
+BasicLoop:
 	for i < n {
 		t.Line = t.Lines[i].N
 		j := t.Lines[i].Cmd.Eval(t)
 
 		if j > 0 {
+      if index, ok := gotoCache[j]; ok {
+        i = index
+        continue BasicLoop
+      }
 			// Branching instruction.
 			t.CheckExpiration()
 			for i = 0; i < n; i++ {
 				if t.Lines[i].N >= j {
-					continue Loop
+          gotoCache[j] = i
+					continue BasicLoop
 				}
 			}
 		} else {
