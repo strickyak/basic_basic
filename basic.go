@@ -23,7 +23,7 @@ var Debug bool
 
 var F = fmt.Sprintf
 
-var FindKeyword = regexp.MustCompile(`^(?i)(rem|let|dim|print|goto|gosub|return|if|then|else|for|to|next|stop|call)\b`).FindString
+var FindKeyword = regexp.MustCompile(`^(?i)(REM|LET|DIM|PRINT|GOTO|GOSUB|RETURN|IF|THEN|ELSE|FOR|TO|NEXT|STOP|CALL)\b`).FindString
 
 var FindNewline = regexp.MustCompile("^[;\n]").FindString                                    // Semicolons are newlines.
 var FindWhite = regexp.MustCompile("^[ \t\r]*").FindString                                   // But not newlines.
@@ -217,14 +217,14 @@ func (o *Terp) Advance1() {
 	m = FindKeyword(o.Program[o.P:])
 	if m != "" {
 		o.K = Keyword
-		o.S = m
+		o.S = strings.ToUpper(m)
 		o.P += len(m)
 		return
 	}
 	m = FindVar(o.Program[o.P:])
 	if m != "" {
 		o.K = Var
-		o.S = m
+		o.S = strings.ToUpper(m)
 		o.P += len(m)
 		return
 	}
@@ -717,26 +717,26 @@ Loop:
 		default:
 			panic("expected command after line number")
 		}
-		switch strings.ToLower(w) {
+		switch w {
 		case ";":
 			c = &NopCmd{}
-		case "rem":
+		case "REM":
 			c = &NopCmd{}
 			for lex.K != EOF && lex.K != Newline {
 				lex.Advance()
 			}
-		case "goto":
+		case "GOTO":
 			n := int(lex.ParseNumber())
 			c = &GotoCmd{N: n}
-		case "gosub":
+		case "GOSUB":
 			n := int(lex.ParseNumber())
 			c = &GosubCmd{CallLine: n}
-		case "return":
+		case "RETURN":
 			c = &ReturnCmd{}
-		case "print":
+		case "PRINT":
 			x := lex.ParseExpr()
 			c = &PrintCmd{X: x}
-		case "dim":
+		case "DIM":
 			v := lex.ParseVar()
 			lex.ParseMustSym("(")
 			var dims []int
@@ -752,32 +752,32 @@ Loop:
 			}
 			lex.Advance()
 			c = &DimCmd{Var: v, Dims: dims}
-		case "let":
+		case "LET":
 			v := lex.ParseDestination()
 			lex.ParseMustSym("=")
 			x := lex.ParseExpr()
 			c = &LetCmd{Dest: v, X: x}
-		case "next":
+		case "NEXT":
 			v := lex.ParseVar()
 			c = &NextCmd{Var: v}
-		case "for":
+		case "FOR":
 			v := lex.ParseVar()
 			lex.ParseMustSym("=")
 			x := lex.ParseExpr()
-			lex.ParseMustKeyword("to")
+			lex.ParseMustKeyword("TO")
 			y := lex.ParseExpr()
 			c = &ForCmd{Var: v, Begin: x, End: y}
-		case "if":
+		case "IF":
 			cond := lex.ParseExpr()
-			lex.ParseMustKeyword("then")
+			lex.ParseMustKeyword("THEN")
 			ifTrue := SnapToInt(lex.ParseNumber())
 			ifFalse := 0
-			if lex.S == "else" {
-				lex.ParseMustKeyword("else")
+			if lex.S == "ELSE" {
+				lex.ParseMustKeyword("ELSE")
 				ifFalse = SnapToInt(lex.ParseNumber())
 			}
 			c = &IfCmd{Cond: cond, Then: ifTrue, Else: ifFalse}
-		case "call":
+		case "CALL":
 			name := strings.ToLower(lex.ParseVar())
 			lex.ParseMustSym("(")
 			var args []*Expr

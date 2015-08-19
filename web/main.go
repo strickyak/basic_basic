@@ -155,6 +155,19 @@ func handler(w http.ResponseWriter, req *http.Request) {
 		} else {
 			dict["Code"] = template.HTML(DEMO)
 		}
+
+		{
+			names, err := filepath.Glob("*{33}.bas")
+			if err != nil {
+				panic(err)
+			}
+			for i, e := range names {
+				names[i] = e[:len(e)-8] // Chop "{33}.bas"
+			}
+			sort.Strings(names)
+			dict["Links"] = names
+		}
+
 		Tmpl.ExecuteTemplate(w, "Main", dict)
 	}
 }
@@ -169,6 +182,10 @@ const TEMPLATES = `
         &nbsp; &nbsp; &nbsp; &nbsp;
         ( Save as: <input type=text width=20 name=progname> )
       </form>
+<p>
+<br>
+    <b>Demos:</b> {{range .Links}} <a href="/?load={{.}}{33}.bas">{{.}}</a> &nbsp; {{end}}
+<br>
       {{template "Doc" $}}
 {{end}}
 
