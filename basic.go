@@ -31,6 +31,7 @@ var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`).FindString          
 var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString                        // Not yet E notaion.
 var FindPunc = regexp.MustCompile(`^[][(){},;]`).FindString                                  // Single char punc.
 var FindOp = regexp.MustCompile(`^(==|!=|<=|>=|<>|[*][*]|<<|>>|[^A-Za-z0-9;\s])`).FindString // Contains some double-char sequences.
+var FindString = regexp.MustCompile(`^"([^"]|"")*"`).FindString                                  // Single char punc.
 
 type Kind int
 
@@ -39,6 +40,7 @@ const (
 	Keyword
 	Var
 	Number
+	String
 	Newline
 	Punc
 	Op
@@ -54,6 +56,8 @@ func (k Kind) String() string {
 		return "Var"
 	case Number:
 		return "Number"
+	case String:
+		return "String"
 	case Newline:
 		return "Newline"
 	case Op:
@@ -242,6 +246,13 @@ func (o *Terp) Advance1() {
 		o.P += len(m)
 		return
 	}
+	m = FindString(o.Program[o.P:])
+	if m != "" {
+		o.K = String
+		o.S = strings.Replace(m[1:len(m)-1], `""`, `"`, -1)
+		o.P += len(m)
+		return
+	}
 	m = FindPunc(o.Program[o.P:])
 	if m != "" {
 		o.K = Punc
@@ -427,16 +438,29 @@ func (o *GotoCmd) Eval(t *Terp) int {
 }
 
 type PrintCmd struct {
-	X *Expr
+	X *Expr  // union, if floating expr
+	S string  // union, if string literal
 }
 
-func (o *PrintCmd) String() string { return F("Print %v", o.X) }
+func (o *PrintCmd) String() string {
+  if o.X == nil {
+    return F("Print %q", o.S)
+  } else {
+    return F("Print %v", o.X)
+  }
+}
 func (o *PrintCmd) Eval(t *Terp) int {
-	t.LastPrinted = o.X.Eval(t)
-	bb := []byte(strings.Trim(fmt.Sprintf("%.15g", t.LastPrinted), " ") + " ")
-	for _, b := range bb {
-		t.Putchar(b)
-	}
+  if o.X == nil {
+    for _, b := range []byte(o.S) {
+      t.Putchar(b)
+    }
+  } else {
+    t.LastPrinted = o.X.Eval(t)
+    bb := []byte(strings.Trim(fmt.Sprintf("%.15g", t.LastPrinted), " ") + " ")
+    for _, b := range bb {
+      t.Putchar(b)
+    }
+  }
 	return 0
 }
 
@@ -740,8 +764,13 @@ Loop:
 		case "RETURN":
 			c = &ReturnCmd{}
 		case "PRINT":
-			x := lex.ParseExpr()
-			c = &PrintCmd{X: x}
+      if lex.K == String {
+			  c = &PrintCmd{S: lex.S}
+				lex.Advance()
+      } else {
+			  x := lex.ParseExpr()
+			  c = &PrintCmd{X: x}
+      }
 		case "DIM":
 			v := lex.ParseVar()
 			lex.ParseMustSym("(")
