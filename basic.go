@@ -31,7 +31,7 @@ var FindVar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`).FindString          
 var FindNumber = regexp.MustCompile(`^-?[0-9]+[.]?[0-9]*`).FindString                        // Not yet E notaion.
 var FindPunc = regexp.MustCompile(`^[][(){},;]`).FindString                                  // Single char punc.
 var FindOp = regexp.MustCompile(`^(==|!=|<=|>=|<>|[*][*]|<<|>>|[^A-Za-z0-9;\s])`).FindString // Contains some double-char sequences.
-var FindString = regexp.MustCompile(`^"([^"]|"")*"`).FindString                                  // Single char punc.
+var FindString = regexp.MustCompile(`^"([^"]|"")*"`).FindString                              // String Literal.
 
 type Kind int
 
@@ -180,22 +180,22 @@ func (t *Terp) Run() {
 		}()
 	}
 
-  gotoCache := make(map[int]int) // Line Num Dest -> Lines Slice Index
+	gotoCache := make(map[int]int) // Line Num Dest -> Lines Slice Index
 BasicLoop:
 	for i < n {
 		t.Line = t.Lines[i].N
 		j := t.Lines[i].Cmd.Eval(t)
 
 		if j > 0 {
-      if index, ok := gotoCache[j]; ok {
-        i = index
-        continue BasicLoop
-      }
+			if index, ok := gotoCache[j]; ok {
+				i = index
+				continue BasicLoop
+			}
 			// Branching instruction.
 			t.CheckExpiration()
 			for i = 0; i < n; i++ {
 				if t.Lines[i].N >= j {
-          gotoCache[j] = i
+					gotoCache[j] = i
 					continue BasicLoop
 				}
 			}
@@ -439,28 +439,28 @@ func (o *GotoCmd) Eval(t *Terp) int {
 
 type PrintCmd struct {
 	X *Expr  // union, if floating expr
-	S string  // union, if string literal
+	S string // union, if string literal
 }
 
 func (o *PrintCmd) String() string {
-  if o.X == nil {
-    return F("Print %q", o.S)
-  } else {
-    return F("Print %v", o.X)
-  }
+	if o.X == nil {
+		return F("Print %q", o.S)
+	} else {
+		return F("Print %v", o.X)
+	}
 }
 func (o *PrintCmd) Eval(t *Terp) int {
-  if o.X == nil {
-    for _, b := range []byte(o.S) {
-      t.Putchar(b)
-    }
-  } else {
-    t.LastPrinted = o.X.Eval(t)
-    bb := []byte(strings.Trim(fmt.Sprintf("%.15g", t.LastPrinted), " ") + " ")
-    for _, b := range bb {
-      t.Putchar(b)
-    }
-  }
+	if o.X == nil {
+		for _, b := range []byte(o.S) {
+			t.Putchar(b)
+		}
+	} else {
+		t.LastPrinted = o.X.Eval(t)
+		bb := []byte(strings.Trim(fmt.Sprintf("%.15g", t.LastPrinted), " ") + " ")
+		for _, b := range bb {
+			t.Putchar(b)
+		}
+	}
 	return 0
 }
 
@@ -764,13 +764,13 @@ Loop:
 		case "RETURN":
 			c = &ReturnCmd{}
 		case "PRINT":
-      if lex.K == String {
-			  c = &PrintCmd{S: lex.S}
+			if lex.K == String {
+				c = &PrintCmd{S: lex.S}
 				lex.Advance()
-      } else {
-			  x := lex.ParseExpr()
-			  c = &PrintCmd{X: x}
-      }
+			} else {
+				x := lex.ParseExpr()
+				c = &PrintCmd{X: x}
+			}
 		case "DIM":
 			v := lex.ParseVar()
 			lex.ParseMustSym("(")
