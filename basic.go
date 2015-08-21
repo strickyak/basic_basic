@@ -186,7 +186,11 @@ BasicLoop:
 		t.Line = t.Lines[i].N
 		j := t.Lines[i].Cmd.Eval(t)
 
-		if j > 0 {
+		switch {
+		case j < 0:
+			break BasicLoop // STOP and END commands.
+
+		case j > 0:
 			if index, ok := gotoCache[j]; ok {
 				i = index
 				continue BasicLoop
@@ -199,7 +203,8 @@ BasicLoop:
 					continue BasicLoop
 				}
 			}
-		} else {
+
+		case j == 0:
 			// Proceed to next instrution.
 			i++
 		}
@@ -435,6 +440,20 @@ type GotoCmd struct {
 func (o *GotoCmd) String() string { return F("Goto %d", o.N) }
 func (o *GotoCmd) Eval(t *Terp) int {
 	return o.N
+}
+
+type StopCmd struct {
+}
+type EndCmd struct {
+}
+
+func (o *StopCmd) String() string { return F("Stop") }
+func (o *StopCmd) Eval(t *Terp) int {
+	return -1
+}
+func (o *EndCmd) String() string { return F("End") }
+func (o *EndCmd) Eval(t *Terp) int {
+	return -1
 }
 
 type PrintCmd struct {
@@ -674,7 +693,7 @@ func (lex *Terp) ParseProduct() *Expr {
 	a := lex.ParseComposite()
 	for lex.K == Op && MatchProduct(lex.S) {
 		op := lex.S
-		lex.Advance()           // Consume op.
+		lex.Advance()             // Consume op.
 		b := lex.ParseComposite() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
@@ -698,7 +717,7 @@ func (lex *Terp) ParseRelop() *Expr {
 	a := lex.ParseSum()
 	for lex.K == Op && MatchRelop(lex.S) {
 		op := lex.S
-		lex.Advance()         // Consume op.
+		lex.Advance()       // Consume op.
 		b := lex.ParseSum() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
@@ -795,6 +814,10 @@ Loop:
 		case "NEXT":
 			v := lex.ParseVar()
 			c = &NextCmd{Var: v}
+		case "STOP":
+			c = &StopCmd{}
+		case "END":
+			c = &EndCmd{}
 		case "FOR":
 			v := lex.ParseVar()
 			lex.ParseMustSym("=")

@@ -203,30 +203,32 @@ which draws colored triangles on a canvas with
 coordinates [0 .. 100) on both x and y axes.
 
 Statement ::= LineNumber Stmt
-Stmt := REM remark...
-  | DIM arr(size), matrix(width,heigth)
-  | LET var := expr
-  | LET arr(i, j...) := expr
-  | GOTO n
-  | IF expr THEN y
-  | IF expr THEN y ELSE n
-  | FOR var = a TO b
-  | NEXT var
-  | GOSUB n
-  | RETURN
-  | PRINT expr
-  | PRINT strlit
-  | CALL triangle( x1, y1, x2, y2, x3, y3, rgb )
-       ... where n & y are line numbers
-       ... where rgb is decimal (r=hundreds, g=tens, b=ones)
+Stmt ::= REM remark...
+       | DIM arr(size), matrix(width,heigth)
+       | LET var := expr
+       | LET arr(i, j...) := expr
+       | GOTO n
+       | IF expr THEN y
+       | IF expr THEN y ELSE n
+       | FOR var = a TO b
+       | NEXT var
+       | GOSUB n
+       | RETURN
+       | PRINT expr
+       | PRINT strlit
+       | CALL triangle( x1, y1, x2, y2, x3, y3, rgb )
+       | STOP
+       | END
+    ... where n & y are line numbers
+    ... where rgb is decimal (r=hundreds, g=tens, b=ones)
 expr ::= sum relop expr     ...where relop can be == != < > <= >=
 sum ::= prod addop sum      ...where addop can be + -
 prod ::= composite mulop prod    ...where mulop can be * / %%
 composite ::= prim
-  | arr(i, j...)
+            | arr(i, j...)
 prim ::= number
-  | var
-  | ( expr )
+       | var
+       | ( expr )
 strlit ::= "AnyASCIIButDoubleADoubleQuote"
 </pre>
       </body></html>
@@ -235,13 +237,12 @@ strlit ::= "AnyASCIIButDoubleADoubleQuote"
 `
 
 const DEMO = `
-1  REM Draw big grey triangle, then many smaller colored ones.
+1  REM Draw big grey triangle, then 1000 smaller colored ones.
 5  CALL triangle( 0,0, 0,99, 99,0, 444 )
 10 for i = 0 to 9
 20   for j = 0 to 9
 30     for k = 0 to 9
-40       let kk = 9 - k
-44       call triangle (i*10,k+j*10,  9+i*10,j*10,  9+i*10,9+j*10, i+j*10+kk*100)
+50       call triangle (i*10,k+j*10,  9+i*10,j*10,  9+i*10,9+j*10, i+j*10+(9-k)*100)
 70     next k
 80   next j
 90 next i
