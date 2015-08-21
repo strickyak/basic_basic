@@ -184,7 +184,9 @@ const TEMPLATES = `
       </form>
 <p>
 <br>
-    <b>Demos:</b> {{range .Links}} <a href="/?load={{.}}{33}.bas">{{.}}</a> &nbsp; {{end}}
+    <b>Demos:</b> &nbsp;
+    {{range .Links}} <a href="/?load={{.}}{33}.bas">{{.}}</a> &nbsp; {{end}}
+    &nbsp; (then click Submit)
 <br>
       {{template "Doc" $}}
 {{end}}
