@@ -527,10 +527,10 @@ func (o *LetCmd) Eval(t *Terp) int {
 		}
 		subs := o.Dest.Subs
 		for len(subs) > 0 {
-			println(F("thing = %v", thing))
-			println(F("sub[0]=%v", subs[0]))
+			//println(F("thing = %v", thing))
+			//println(F("sub[0]=%v", subs[0]))
 			e := SnapToInt(subs[0].Eval(t))
-			println(F("e=%v", e))
+			//println(F("e=%v", e))
 			if e < 0 {
 				panic(F("negative subscript: array %s got %d", name, e))
 			}
@@ -556,7 +556,7 @@ func (o *LetCmd) Eval(t *Terp) int {
 			}
 			subs = subs[1:]
 		}
-		println(F("THING = %v", thing))
+		//println(F("THING = %v", thing))
 		panic(F("notreached: Subs=%v", o.Dest.Subs))
 	} else {
 		t.Scalars[*o.Dest.Var] = x
