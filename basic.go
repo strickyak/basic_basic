@@ -675,7 +675,7 @@ func (lex *Terp) ParseProduct() *Expr {
 	for lex.K == Op && MatchProduct(lex.S) {
 		op := lex.S
 		lex.Advance()           // Consume op.
-		b := lex.ParseProduct() // May be the negative constant.
+		b := lex.ParseComposite() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
 	return a
@@ -689,7 +689,7 @@ func (lex *Terp) ParseSum() *Expr {
 		} else {
 			lex.Advance() // Consume op.
 		}
-		b := lex.ParseSum() // May be the negative constant.
+		b := lex.ParseProduct() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
 	return a
@@ -699,7 +699,7 @@ func (lex *Terp) ParseRelop() *Expr {
 	for lex.K == Op && MatchRelop(lex.S) {
 		op := lex.S
 		lex.Advance()         // Consume op.
-		b := lex.ParseRelop() // May be the negative constant.
+		b := lex.ParseSum() // May be the negative constant.
 		a = &Expr{A: a, Op: op, B: b}
 	}
 	return a
