@@ -12,7 +12,7 @@ import (
 const WIDTH = 800
 const HEIGHT = 800
 const MARGIN = 5.0
-const SPOTSIZE = 0.5
+const SPOTSIZE = 0.33333
 
 // Decimal2RGB converts decimal number RGB to byte colors.
 func Decimal2RGB(dec float64) (byte, byte, byte) {
