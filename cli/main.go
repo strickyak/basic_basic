@@ -15,7 +15,8 @@ import (
 )
 
 func putchar(ch byte) {
-	fmt.Printf("<%c>", ch)
+	// fmt.Printf("<%c>", ch)
+	fmt.Printf("%c", ch)
 }
 
 func main() {
